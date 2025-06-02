@@ -1,0 +1,1885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Text to Speech</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc; 
+            background-image: linear-gradient(45deg, 
+                #f0f9ff 25%, 
+                transparent 25%, transparent 50%, 
+                #f0f9ff 50%, #f0f9ff 75%, 
+                transparent 75%, transparent 100%);
+            background-size: 40px 40px; 
+        }
+        .drop-zone {
+            border: 2px dashed #ccc;
+            border-radius: 0.5rem;
+            padding: 2rem;
+            text-align: center;
+            transition: background-color 0.2s ease;
+            background-color: #fff; 
+        }
+        .drop-zone.dragover {
+            background-color: #e0f2fe; 
+            border-color: #38bdf8; 
+        }
+        .history-item, .queue-item-main { 
+            cursor: default; 
+            padding: 0.5rem;
+            border-radius: 0.25rem;
+            display: flex;
+            flex-direction: column; 
+            align-items: stretch; 
+            sm:flex-row sm:justify-between sm:align-items: center; 
+        }
+        .history-item.odd, .queue-item-main.odd {
+             background-color: #f0f9ff; 
+        }
+        .history-item:hover, .queue-item-main:hover { 
+            background-color: #e0f2fe; 
+        }
+        .history-item span, .queue-item-main span { 
+            cursor: text;
+            margin-bottom: 0.25rem; 
+            sm:margin-bottom: 0;
+            word-break: break-all; 
+            flex-grow: 1; 
+            margin-right: 0.5rem; 
+        }
+        .queue-item-buttons-main {
+            display: flex;
+            flex-direction: row; 
+            width: auto; 
+            gap: 0.5rem; 
+            margin-top: 0.25rem; 
+            sm:margin-top: 0;
+        }
+        .queue-btn-main { 
+            padding: 0.35rem; 
+            font-size: 0.8rem; 
+            border-radius: 0.25rem; 
+            width: 2.25rem; 
+            height: 2.25rem; 
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .queue-btn-main svg {
+            width: 1rem; 
+            height: 1rem; 
+        }
+
+
+        .history-list::-webkit-scrollbar, #mainFileQueueListContainer::-webkit-scrollbar {
+            width: 8px;
+        }
+        .history-list::-webkit-scrollbar-track, #mainFileQueueListContainer::-webkit-scrollbar-track {
+            background: #f0f9ff; 
+            border-radius: 10px;
+        }
+        .history-list::-webkit-scrollbar-thumb, #mainFileQueueListContainer::-webkit-scrollbar-thumb {
+            background: #7dd3fc; 
+            border-radius: 10px;
+        }
+        .history-list::-webkit-scrollbar-thumb:hover, #mainFileQueueListContainer::-webkit-scrollbar-thumb:hover {
+            background: #38bdf8; 
+        }
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 8px;
+            background: #bae6fd; 
+            outline: none;
+            opacity: 0.7;
+            transition: opacity .15s ease-in-out;
+            border-radius: 4px;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: #0284c7; 
+            cursor: pointer;
+            border-radius: 50%;
+            border: 2px solid white;
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            background: #0284c7; 
+            cursor: pointer;
+            border-radius: 50%;
+            border: 2px solid white;
+        }
+        .message-box-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .message-box-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 90%;
+            width: 400px;
+        }
+        .message-box-content h3 {
+            margin-top: 0;
+            margin-bottom: 1rem;
+            font-size: 1.25rem;
+            font-weight: bold;
+        }
+        .message-box-content p {
+            margin-bottom: 1.5rem;
+        }
+        .message-box-button {
+            padding: 0.5rem 1rem;
+            border-radius: 0.25rem;
+            cursor: pointer;
+        }
+        .ai-highlight {
+            color: #0ea5e9; 
+            font-weight: bold;
+        }
+        .logo-svg { 
+            width: 40px; 
+            height: 40px; 
+            margin-right: 0.75rem; 
+            fill: #0ea5e9; 
+        }
+        .toast-container {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            z-index: 1050;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .toast {
+            background-color: #22c55e; 
+            color: white;
+            padding: 0.75rem 1.25rem;
+            border-radius: 0.375rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            display: flex;
+            align-items: center;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .toast.error {
+            background-color: #ef4444; 
+        }
+        .toast.info {
+             background-color: #3b82f6; 
+        }
+        .toast-icon {
+            margin-right: 0.5rem;
+        }
+        .history-panel {
+            position: fixed;
+            top: 0;
+            right: -400px; 
+            width: 350px;
+            height: 100%;
+            background-color: white;
+            box-shadow: -2px 0 8px rgba(0,0,0,0.1);
+            z-index: 900;
+            transition: right 0.3s ease-in-out;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+        }
+        .history-panel.open {
+            right: 0;
+        }
+        .history-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #e5e7eb; 
+        }
+        .history-panel-header h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #374151; 
+        }
+        .close-history-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: #6b7280; 
+            cursor: pointer;
+        }
+        .close-history-btn:hover {
+            color: #1f2937; 
+        }
+        .main-content-container { 
+            background-color: white; 
+        }
+        .player-control-button { 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 9999px; 
+            width: 2.5rem; 
+            height: 2.5rem; 
+        }
+        #audioPlayerContainer { 
+            position: relative;
+        }
+        #settingsSection {
+            background-color: #e0f2fe; 
+            border-left-color: #0ea5e9; 
+            color: #0369a1; 
+        }
+        #settingsSection label {
+            color: #0369a1; 
+        }
+        #settingsSection input, #settingsSection select, #settingsSection textarea {
+            border-color: #7dd3fc; 
+        }
+         #settingsSection input:focus, #settingsSection select:focus, #settingsSection textarea:focus {
+            border-color: #0ea5e9; 
+            box-shadow: 0 0 0 2px #38bdf8; 
+        }
+        
+        .sort-button {
+            background-color: #e0f2fe; 
+            color: #0ea5e9; 
+            border: 1px solid #7dd3fc; 
+            padding: 0.35rem 0.6rem; 
+            border-radius: 0.25rem;
+            font-size: 0.8rem; 
+            line-height: 1; 
+            margin-left: 0.25rem;
+            cursor: pointer;
+            width: 2.25rem; 
+            height: 2.25rem; 
+            display: inline-flex; 
+            align-items: center;
+            justify-content: center;
+        }
+        .sort-button:hover {
+            background-color: #bae6fd; 
+        }
+        .sort-button.active {
+            background-color: #0ea5e9; 
+            color: white;
+        }
+        .queue-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem; 
+        }
+
+    </style>
+</head>
+<body class="text-gray-800 p-4 md:p-8">
+
+    <div class="container mx-auto max-w-4xl main-content-container p-6 rounded-lg shadow-xl">
+        <header class="mb-6 text-center">
+            <div class="flex justify-center items-center mb-2">
+                <svg class="logo-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3zM19 10v2a7 7 0 01-14 0v-2H3v2a9 9 0 008 8.94V23h2v-2.06A9 9 0 0021 12v-2h-2z"/>
+                </svg>
+                <h1 class="text-3xl font-bold text-gray-700"><span class="ai-highlight">AI</span> Text to Speech</h1>
+            </div>
+            <p class="text-sm text-gray-500">Drag & drop files, paste text, and listen.</p>
+        </header>
+
+        <div class="mb-6 flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-2 md:justify-end">
+            <button id="popOutPlayerBtnHeader" class="w-full md:w-auto p-2 bg-purple-500 hover:bg-purple-600 text-white rounded-md text-sm flex items-center justify-center" title="Open Mini Player">
+                <i class="fas fa-window-restore mr-2"></i>Mini Player
+            </button>
+            <button id="historyBtn" class="w-full md:w-auto p-2 bg-sky-500 hover:bg-sky-600 text-white rounded-md text-sm flex items-center justify-center">
+                <i class="fas fa-history mr-2"></i>History
+            </button>
+            <button id="settingsBtn" class="w-full md:w-auto p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md text-sm flex items-center justify-center">
+                <i class="fas fa-cog mr-2"></i>Settings
+            </button>
+        </div>
+        
+        <div id="settingsSection" class="mb-6 p-4 border-l-4 rounded-md hidden">
+            <div class="mb-4">
+                <label for="apiKey" class="block text-sm font-medium mb-1">Google TTS API Key:</label>
+                <input type="password" id="apiKey" class="w-full p-2 border rounded-md bg-white" placeholder="Enter your Google Cloud TTS API Key">
+            </div>
+            <div class="mb-4">
+                <label for="voiceSelect" class="block text-sm font-medium mb-1">Select Voice (Cost Indicated):</label>
+                <select id="voiceSelect" class="w-full p-2 border rounded-md bg-white">
+                    <option value="en-GB-Standard-B">UK Male (Standard) ($) - Default</option>
+                    <option value="en-US-Standard-D">US Male (Standard) ($)</option>
+                    <option value="en-GB-Wavenet-D">UK Male (Deep, Wavenet) ($$)</option>
+                    <option value="en-GB-Wavenet-B">UK Male (Standard, Wavenet) ($$)</option>
+                    <option value="en-US-Wavenet-D">US Male (Standard, Wavenet) ($$)</option>
+                    <option value="en-US-Wavenet-J">US Male (Deep, Smooth, Wavenet) ($$)</option>
+                    <option value="en-AU-Wavenet-B">AU Male (Standard, Wavenet) ($$)</option>
+                    <option value="en-US-Studio-M">US Male (Studio Quality) ($$$)</option>
+                    <option value="en-GB-Studio-B">UK Male (Studio Quality) ($$$)</option>
+                </select>
+            </div>
+            <div class="mb-4">
+                <label for="ssmlTemplate" class="block text-sm font-medium mb-1">SSML Chunk Template (use {{TEXT_CONTENT}} as placeholder):</label>
+                <textarea id="ssmlTemplate" rows="5" class="w-full p-2 border rounded-md bg-white font-mono text-xs" placeholder="e.g. <speak><p><s>{{TEXT_CONTENT}}</s></p></speak>"></textarea>
+                <p class="text-xs mt-1">Default is a newsreader style. Modifying this requires understanding SSML.</p>
+            </div>
+            <button id="saveSettingsBtn" class="p-2 bg-green-500 hover:bg-green-600 text-white rounded-md text-sm w-full md:w-auto">Save & Close Settings</button>
+        </div>
+
+        <div class="queue-header">
+            <h3 class="text-xl font-semibold text-gray-700">Filing Cabinet (Queue)</h3>
+            <div class="flex items-center ml-auto"> <button id="sortQueueAlpha" class="sort-button" title="Sort Alphabetically (A-Z / Z-A)">
+                    <i class="fas fa-sort-alpha-down"></i>
+                </button>
+                <button id="sortQueueTime" class="sort-button" title="Sort by Time Added (Newest / Oldest)">
+                    <i class="fas fa-clock"></i> <i class="fas fa-sort-numeric-down"></i>
+                </button>
+                <button id="clearMainQueueBtn" class="sort-button" title="Clear Queue">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+            </div>
+        </div>
+        <div id="mainFileQueueListContainer" class="max-h-60 overflow-y-auto border border-gray-200 rounded-md p-2 bg-gray-50 mb-2 shadow-inner">
+            <div id="mainFileQueueList" class="divide-y divide-gray-100">
+                <p class="text-gray-400 italic text-center p-2">Queue is empty.</p>
+            </div>
+        </div>
+        <div id="dropZone" class="drop-zone mb-2"> 
+            <p class="text-gray-500"><i class="fas fa-file-import fa-2x mb-1"></i><br>Drag & drop files to add to queue.</p>
+            <input type="file" id="fileInput" class="hidden" accept=".txt,.pdf" multiple>
+        </div>
+        <div class="mb-4">
+            <textarea id="textPasteArea" rows="3" class="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 shadow-sm md:rows-6" placeholder="Paste text to add to queue..."></textarea>
+            <button id="addPastedToQueueBtn" class="mt-2 p-2 bg-sky-500 hover:bg-sky-600 text-white rounded-md text-sm w-full md:w-auto">Add Pasted Text to Queue</button>
+        </div>
+        
+        <div id="statusMessage" class="mb-4 p-3 rounded-md text-sm text-center"></div>
+
+        <div id="audioPlayerContainer" class="mb-6 p-4 bg-gray-50 rounded-lg shadow hidden">
+            <h2 id="nowPlaying" class="text-lg font-semibold mb-2 text-gray-700">Now Playing: -</h2>
+            <audio id="audioPlayer" class="w-full mb-2" controlsList="nodownload nofullscreen noremoteplayback"></audio>
+            
+            <div class="flex items-center justify-around space-x-2 mb-3">
+                <button id="prevChunkBtn" class="player-control-button bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed" title="Previous Chunk"><i class="fas fa-step-backward"></i></button>
+                <button id="playPauseBtn" class="player-control-button bg-green-500 hover:bg-green-600 text-white disabled:opacity-50 disabled:cursor-not-allowed" title="Play/Pause"><i class="fas fa-play"></i></button>
+                <button id="stopBtn" class="player-control-button bg-red-500 hover:bg-red-600 text-white disabled:opacity-50 disabled:cursor-not-allowed" title="Stop"><i class="fas fa-stop"></i></button>
+                <button id="nextChunkBtn" class="player-control-button bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed" title="Next Chunk"><i class="fas fa-step-forward"></i></button>
+            </div>
+
+            <div class="mb-2">
+                <input type="range" id="seekBar" value="0" class="w-full cursor-pointer">
+                <div class="flex justify-between text-xs text-gray-500 mt-1">
+                    <span id="currentTime">0:00</span>
+                    <span id="totalDuration">0:00</span>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-4">
+                <div class="flex items-center space-x-1">
+                    <i class="fas fa-volume-up text-gray-600"></i>
+                    <input type="range" id="volumeBar" min="0" max="1" step="0.01" value="1" class="w-24 cursor-pointer">
+                </div>
+                <div class="flex items-center space-x-1">
+                    <i class="fas fa-tachometer-alt text-gray-600"></i>
+                    <select id="playbackSpeed" class="p-1 border border-gray-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="0.5">0.5x</option>
+                        <option value="0.75">0.75x</option>
+                        <option value="1" selected>1x</option>
+                        <option value="1.25">1.25x</option>
+                        <option value="1.5">1.5x</option>
+                        <option value="2">2x</option>
+                    </select>
+                </div>
+            </div>
+             </div>
+
+        <div id="historyPanel" class="history-panel">
+            <div class="history-panel-header">
+                <h3>Session History</h3>
+                <button id="closeHistoryBtn" class="close-history-btn" title="Close History">&times;</button>
+            </div>
+            <div id="historyList" class="history-list flex-grow overflow-y-auto bg-white p-3 rounded-md shadow-inner"> <p class="text-gray-400 italic">No files processed yet.</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="messageBoxOverlay" class="message-box-overlay hidden">
+        <div class="message-box-content">
+            <h3 id="messageBoxTitle">Notification</h3>
+            <p id="messageBoxText"></p>
+            <button id="messageBoxButton" class="bg-blue-500 hover:bg-blue-600 text-white message-box-button">OK</button>
+        </div>
+    </div>
+
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // DOM Elements - Main Player
+            const dropZone = document.getElementById('dropZone');
+            const fileInput = document.getElementById('fileInput');
+            const apiKeyInput = document.getElementById('apiKey');
+            const voiceSelect = document.getElementById('voiceSelect');
+            const ssmlTemplateInput = document.getElementById('ssmlTemplate');
+            const settingsSection = document.getElementById('settingsSection');
+            const settingsBtn = document.getElementById('settingsBtn');
+            const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+            const statusMessage = document.getElementById('statusMessage');
+            const textPasteArea = document.getElementById('textPasteArea');
+            const addPastedToQueueBtn = document.getElementById('addPastedToQueueBtn'); 
+            const mainFileQueueListContainer = document.getElementById('mainFileQueueListContainer');
+            const mainFileQueueList = document.getElementById('mainFileQueueList');
+            const audioPlayerContainer = document.getElementById('audioPlayerContainer');
+            const audioPlayer = document.getElementById('audioPlayer');
+            const playPauseBtn = document.getElementById('playPauseBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            const prevChunkBtn = document.getElementById('prevChunkBtn');
+            const nextChunkBtn = document.getElementById('nextChunkBtn');
+            const popOutPlayerBtnHeader = document.getElementById('popOutPlayerBtnHeader'); 
+            const seekBar = document.getElementById('seekBar');
+            const currentTimeDisplay = document.getElementById('currentTime');
+            const totalDurationDisplay = document.getElementById('totalDuration');
+            const volumeBar = document.getElementById('volumeBar');
+            const playbackSpeedSelect = document.getElementById('playbackSpeed');
+            const nowPlayingDisplay = document.getElementById('nowPlaying');
+            const historyBtn = document.getElementById('historyBtn');
+            const historyPanel = document.getElementById('historyPanel');
+            const closeHistoryBtn = document.getElementById('closeHistoryBtn');
+            const historyList = document.getElementById('historyList');
+            const messageBoxOverlay = document.getElementById('messageBoxOverlay');
+            const messageBoxTitle = document.getElementById('messageBoxTitle');
+            const messageBoxText = document.getElementById('messageBoxText');
+            const messageBoxButton = document.getElementById('messageBoxButton');
+            const toastContainer = document.getElementById('toastContainer');
+            const sortQueueAlphaBtn = document.getElementById('sortQueueAlpha');
+            const sortQueueTimeBtn = document.getElementById('sortQueueTime');
+            const clearMainQueueBtn = document.getElementById('clearMainQueueBtn');
+
+
+            // App State - Main Player
+            let currentText = ''; 
+            let textChunks = [];  
+            let audioChunks = []; 
+            let currentChunkIndex = 0;
+            let sessionHistory = []; 
+            let isPlaying = false;
+            let currentFileName = ''; 
+            let mainPlayerQueue = []; 
+            const DEFAULT_VOICE = 'en-GB-Standard-B'; 
+            const DEFAULT_SSML_TEMPLATE = '<speak><p><s>{{TEXT_CONTENT}}</s></p></speak>';
+            const MAX_CHUNK_LENGTH = 4500; 
+            let miniPlayerWindow = null;
+            let currentSortType = 'time'; 
+            let currentSortOrder = 'desc'; 
+
+
+            // --- Gemini API Title Generation ---
+            async function generateTitleWithGemini(textSnippet, apiKey) {
+                if (!apiKey) {
+                    console.warn("Gemini API key not available for title generation.");
+                    return null; 
+                }
+                const prompt = `Generate a very short, concise title (max 5 words) for the following text. Do not include asterisks or quotes in the title: "${textSnippet.substring(0, 250)}..."`;
+                let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+                const payload = { contents: chatHistory };
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        console.error("Gemini API error for title:", errorData);
+                        return null;
+                    }
+                    const result = await response.json();
+                    if (result.candidates && result.candidates.length > 0 &&
+                        result.candidates[0].content && result.candidates[0].content.parts &&
+                        result.candidates[0].content.parts.length > 0) {
+                        let title = result.candidates[0].content.parts[0].text.trim();
+                        title = title.replace(/^["'*]*(.*?)[*"']*$/, '$1').trim();
+                        return title || null;
+                    }
+                    return null;
+                } catch (error) {
+                    console.error("Error calling Gemini API for title:", error);
+                    return null;
+                }
+            }
+
+
+            const miniPlayerHTML = `
+                <!DOCTYPE html>
+                <html lang="en">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>AI TTS Mini Player</title>
+                    <script src="https://cdn.tailwindcss.com"><\/script> 
+                    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+                    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"><\/script>
+                    <script>
+                        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                    <\/script>
+                    <style>
+                        body { font-family: 'Inter', sans-serif; background-color: #f0f9ff; padding: 0.75rem; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; }
+                        .player-control-button { display: flex; align-items: center; justify-content: center; border-radius: 9999px; }
+                        .player-control-button.mini-size { width: 2.5rem; height: 2.5rem; } 
+                        .drop-zone-mini { border: 2px dashed #7dd3fc; border-radius: 0.5rem; padding: 0.5rem; text-align: center; background-color: #fff; margin-bottom: 0.5rem; }
+                        .drop-zone-mini.dragover { background-color: #e0f2fe; border-color: #38bdf8; }
+                        #miniNowPlaying { font-size: 0.875rem; font-weight: 600; }
+                        #miniStatus { font-size: 0.75rem; padding: 0.25rem; border-radius: 0.25rem; margin-top: 0.25rem; }
+                        .queue-item { display: flex; flex-direction: column; sm:flex-row; justify-content: space-between; align-items: stretch; sm:align-items: center; padding: 0.3rem 0.5rem; border-bottom: 1px solid #e0f2fe; font-size: 0.8rem; }
+                        .queue-item:last-child { border-bottom: none; }
+                        .queue-item span { flex-grow: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 0rem; sm:margin-right: 0.5rem; margin-bottom: 0.25rem; sm:margin-bottom: 0; }
+                        .mini-queue-buttons { display: flex; flex-direction: column; width:100%; sm:flex-row sm:w-auto; gap: 0.25rem; } 
+                        .queue-btn { padding: 0.2rem 0.4rem; font-size: 0.7rem; border-radius: 0.25rem; width:100%; sm:w-auto; display:inline-flex; align-items:center; justify-content:center; } 
+                        .queue-btn svg { width: 0.8rem; height: 0.8rem; }
+                        #miniFileQueueListContainer { max-height: 150px; overflow-y: auto; border: 1px solid #e0f2fe; border-radius: 0.375rem; background-color: #fff; margin-bottom:0.5rem;}
+                        .mini-sort-button {
+                            background-color: #e0f2fe; 
+                            color: #0ea5e9; 
+                            border: 1px solid #7dd3fc; 
+                            padding: 0.25rem 0.4rem;
+                            border-radius: 0.25rem;
+                            font-size: 0.7rem; 
+                            line-height: 1; 
+                            margin-left: 0.25rem;
+                            cursor: pointer;
+                            width: 2rem; 
+                            height: 2rem; 
+                            display: inline-flex; 
+                            align-items: center;
+                            justify-content: center;
+                        }
+                        .mini-sort-button:hover { background-color: #bae6fd; }
+                        .mini-sort-button.active { background-color: #0ea5e9; color: white; }
+                        .mini-queue-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem; }
+                    </style>
+                </head>
+                <body class="text-gray-800">
+                    <div id="miniNowPlaying" class="truncate mb-1 text-center">Loading...</div>
+                    <audio id="miniAudioPlayer" class="hidden"></audio>
+                    <div class="flex items-center justify-around space-x-1 mb-2">
+                        <button id="miniPrevChunkBtn" class="player-control-button mini-size bg-gray-200 hover:bg-gray-300 disabled:opacity-50" title="Previous"><i class="fas fa-step-backward text-xs"></i></button>
+                        <button id="miniPlayPauseBtn" class="player-control-button mini-size bg-green-500 hover:bg-green-600 text-white disabled:opacity-50" title="Play/Pause"><i class="fas fa-play text-xs"></i></button>
+                        <button id="miniStopBtn" class="player-control-button mini-size bg-red-500 hover:bg-red-600 text-white disabled:opacity-50" title="Stop"><i class="fas fa-stop text-xs"></i></button>
+                        <button id="miniNextChunkBtn" class="player-control-button mini-size bg-gray-200 hover:bg-gray-300 disabled:opacity-50" title="Next"><i class="fas fa-step-forward text-xs"></i></button>
+                    </div>
+                    
+                    <div class="mini-queue-header">
+                        <h3 class="text-sm font-semibold text-sky-700">Filing Cabinet</h3>
+                        <div class="flex items-center">
+                            <button id="miniSortQueueAlpha" class="mini-sort-button" title="Sort Alphabetically">
+                                <i class="fas fa-sort-alpha-down"></i>
+                            </button>
+                            <button id="miniSortQueueTime" class="mini-sort-button" title="Sort by Time Added">
+                                <i class="fas fa-clock"></i> <i class="fas fa-sort-numeric-down"></i>
+                            </button>
+                             <button id="miniClearQueueBtn" class="mini-sort-button" title="Clear Queue">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="miniFileQueueListContainer">
+                         <div id="miniFileQueueList" class="divide-y divide-sky-100">
+                             </div>
+                    </div>
+                    <div id="miniDropZone" class="drop-zone-mini mb-2">
+                        <p class="text-xs text-gray-500"><i class="fas fa-file-import fa-lg mb-1"></i><br>Drop files to queue</p>
+                        <input type="file" id="miniFileInput" class="hidden" accept=".txt,.pdf" multiple>
+                    </div>
+                    <textarea id="miniPasteArea" rows="2" class="w-full p-1 border border-sky-300 rounded-md text-xs mb-1" placeholder="Paste text to queue..."></textarea>
+                    <button id="miniAddToQueueBtn" class="w-full p-1 bg-sky-500 hover:bg-sky-600 text-white rounded-md text-xs mb-2">Add Pasted Text to Queue</button>
+                    
+                    <div id="miniStatus" class="text-center mt-auto text-xs p-1 rounded">Ready</div>
+
+                    <script>
+                        // --- Mini Player JavaScript ---
+                        const miniAudioPlayer = document.getElementById('miniAudioPlayer');
+                        const miniPlayPauseBtn = document.getElementById('miniPlayPauseBtn');
+                        const miniStopBtn = document.getElementById('miniStopBtn');
+                        const miniPrevChunkBtn = document.getElementById('miniPrevChunkBtn');
+                        const miniNextChunkBtn = document.getElementById('miniNextChunkBtn');
+                        const miniNowPlayingDisplay = document.getElementById('miniNowPlaying');
+                        
+                        const miniDropZone = document.getElementById('miniDropZone');
+                        const miniFileInput = document.getElementById('miniFileInput');
+                        const miniPasteArea = document.getElementById('miniPasteArea');
+                        const miniAddToQueueBtn = document.getElementById('miniAddToQueueBtn');
+                        const miniFileQueueList = document.getElementById('miniFileQueueList');
+                        const miniStatusDisplay = document.getElementById('miniStatus');
+                        const miniSortQueueAlphaBtn = document.getElementById('miniSortQueueAlpha');
+                        const miniSortQueueTimeBtn = document.getElementById('miniSortQueueTime');
+                        const miniClearQueueBtn = document.getElementById('miniClearQueueBtn');
+
+
+                        let miniApiKey = '';
+                        let miniVoice = '';
+                        let miniSsmlTemplate = '<speak><p><s>{{TEXT_CONTENT}}</s></p></speak>'; 
+                        
+                        let miniCurrentFileName = 'No file loaded';
+                        let miniTextChunks = [];
+                        let miniAudioChunks = [];
+                        let miniCurrentChunkIndex = 0;
+                        let miniIsPlaying = false;
+                        let miniFileQueue = [];
+                        const MINI_MAX_CHUNK_LENGTH = 4500; 
+                        const DEFAULT_MINI_VOICE = '${DEFAULT_VOICE}'; 
+                        let miniCurrentSortType = 'time';
+                        let miniCurrentSortOrder = 'desc';
+
+                        function escapeXml(unsafe) {
+                            return unsafe.replace(/[<>&"']/g, function (c) {
+                                switch (c) {
+                                    case '<': return '&lt;';
+                                    case '>': return '&gt;';
+                                    case '&': return '&amp;';
+                                    case '"': return '&quot;';
+                                    case "'": return '&apos;';
+                                }
+                                return c;
+                            });
+                        }
+
+                        async function generateTitleWithGeminiMini(textSnippet, apiKey) {
+                            if (!apiKey) { return null; }
+                            const prompt = \`Generate a very short, concise title (max 5 words) for the following text. Do not include asterisks or quotes in the title: "\${textSnippet.substring(0, 250)}..."\`;
+                            let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+                            const payload = { contents: chatHistory };
+                            const apiUrl = \`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=\${apiKey}\`;
+                            try {
+                                const response = await fetch(apiUrl, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(payload)
+                                });
+                                if (!response.ok) { return null; }
+                                const result = await response.json();
+                                if (result.candidates && result.candidates.length > 0 &&
+                                    result.candidates[0].content && result.candidates[0].content.parts &&
+                                    result.candidates[0].content.parts.length > 0) {
+                                    let title = result.candidates[0].content.parts[0].text.trim();
+                                    title = title.replace(/^["'*]*(.*?)[*"']*$/, '$1').trim(); 
+                                    return title || null;
+                                }
+                                return null;
+                            } catch (error) {
+                                console.error("Error calling Gemini API for mini title:", error);
+                                return null;
+                            }
+                        }
+
+
+                        function setMiniStatus(message, type = 'info') {
+                            miniStatusDisplay.textContent = message;
+                            miniStatusDisplay.className = 'text-center text-xs p-1 rounded mt-auto'; 
+                            if (type === 'error') miniStatusDisplay.classList.add('bg-red-100', 'text-red-700');
+                            else if (type === 'success') miniStatusDisplay.classList.add('bg-green-100', 'text-green-700');
+                            else if (type === 'loading') miniStatusDisplay.classList.add('bg-blue-100', 'text-blue-700');
+                            else miniStatusDisplay.classList.add('bg-gray-100', 'text-gray-700');
+                        }
+                        
+                        async function miniSynthesizeChunk(index, forFileName, forTextChunks, forAudioChunks, callback) {
+                            if (index >= forTextChunks.length || !forTextChunks[index]) return;
+                            if (forFileName === miniCurrentFileName) {
+                                setMiniStatus(\`Synthesizing '\${forFileName}' chunk \${index + 1}...\`, 'loading');
+                            }
+                            
+                            const ssmlChunk = miniSsmlTemplate.replace('{{TEXT_CONTENT}}', escapeXml(forTextChunks[index]));
+
+                            const requestBody = {
+                                input: { ssml: ssmlChunk },
+                                voice: { languageCode: miniVoice.substring(0,5), name: miniVoice },
+                                audioConfig: { audioEncoding: 'MP3' }
+                            };
+                            try {
+                                const response = await fetch(\`https://texttospeech.googleapis.com/v1/text:synthesize?key=\${miniApiKey}\`, {
+                                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody)
+                                });
+                                if (!response.ok) {
+                                    const errData = await response.json();
+                                    throw new Error(errData.error?.message || 'TTS API error');
+                                }
+                                const data = await response.json();
+                                if (data.audioContent) {
+                                    forAudioChunks[index] = \`data:audio/mp3;base64,\${data.audioContent}\`;
+                                    if (forFileName === miniCurrentFileName) {
+                                       setMiniStatus(\`'\${forFileName}' chunk \${index + 1} ready.\`, 'success');
+                                    }
+                                    callback(index, forAudioChunks[index], null); 
+                                } else throw new Error('No audio content.');
+                            } catch (error) {
+                                console.error('Mini TTS Error:', error);
+                                if (forFileName === miniCurrentFileName) {
+                                   setMiniStatus(\`TTS Error: \${error.message}\`, 'error');
+                                }
+                                callback(index, null, error.message); 
+                            }
+                        }
+
+                        function miniUpdatePlayPauseButton() {
+                            miniPlayPauseBtn.innerHTML = miniIsPlaying ? '<i class="fas fa-pause text-xs"></i>' : '<i class="fas fa-play text-xs"></i>';
+                        }
+                        function miniUpdateNavButtons() {
+                            miniPrevChunkBtn.disabled = miniCurrentChunkIndex === 0 || miniTextChunks.length === 0;
+                            miniNextChunkBtn.disabled = miniCurrentChunkIndex >= miniTextChunks.length - 1 || miniTextChunks.length === 0;
+                            miniPlayPauseBtn.disabled = miniTextChunks.length === 0;
+                            miniStopBtn.disabled = miniTextChunks.length === 0;
+                        }
+                        
+                        function miniLoadAndPlayChunk(index, autoplay = false) {
+                            if (index < 0 || index >= miniTextChunks.length) {
+                                if (autoplay && miniIsPlaying) miniStopPlayback();
+                                return;
+                            }
+                            miniCurrentChunkIndex = index;
+                            miniUpdateNavButtons();
+
+                            if (miniAudioChunks[index]) {
+                                miniAudioPlayer.src = miniAudioChunks[index];
+                                if (autoplay) {
+                                    miniAudioPlayer.play().then(() => miniIsPlaying = true).catch(e => console.error("Mini play error", e));
+                                }
+                            } else { 
+                                miniSynthesizeChunk(index, miniCurrentFileName, miniTextChunks, miniAudioChunks, (idx, audioData, err) => {
+                                    if (err) {
+                                        setMiniStatus(\`Error synthesizing for playback: \${err}\`, 'error');
+                                        return;
+                                    }
+                                    if (idx === miniCurrentChunkIndex && audioData && autoplay) { 
+                                        miniAudioPlayer.src = audioData;
+                                        miniAudioPlayer.play().then(() => miniIsPlaying = true).catch(e => console.error("Mini play error after synth", e));
+                                    }
+                                });
+                            }
+                            miniUpdatePlayPauseButton();
+                        }
+                        
+                        function miniStopPlayback() {
+                            miniAudioPlayer.pause();
+                            miniAudioPlayer.currentTime = 0;
+                            miniIsPlaying = false;
+                            miniUpdatePlayPauseButton();
+                        }
+
+                        miniPlayPauseBtn.addEventListener('click', () => {
+                            if (!miniAudioPlayer.src && miniTextChunks.length > 0 && miniTextChunks[miniCurrentChunkIndex]) {
+                                 miniLoadAndPlayChunk(miniCurrentChunkIndex, true); 
+                                 return;
+                            }
+                            if (miniIsPlaying) miniAudioPlayer.pause();
+                            else miniAudioPlayer.play().catch(e => console.error("Mini play error", e));
+                        });
+                        miniStopBtn.addEventListener('click', miniStopPlayback);
+                        miniPrevChunkBtn.addEventListener('click', () => {
+                            if (miniCurrentChunkIndex > 0) miniLoadAndPlayChunk(miniCurrentChunkIndex - 1, miniIsPlaying);
+                        });
+                        miniNextChunkBtn.addEventListener('click', () => {
+                            if (miniCurrentChunkIndex < miniTextChunks.length - 1) miniLoadAndPlayChunk(miniCurrentChunkIndex + 1, miniIsPlaying);
+                        });
+                        miniAudioPlayer.addEventListener('play', () => { miniIsPlaying = true; miniUpdatePlayPauseButton(); });
+                        miniAudioPlayer.addEventListener('pause', () => { miniIsPlaying = false; miniUpdatePlayPauseButton(); });
+                        miniAudioPlayer.addEventListener('ended', () => {
+                            if (miniCurrentChunkIndex < miniTextChunks.length - 1) {
+                                miniLoadAndPlayChunk(miniCurrentChunkIndex + 1, true);
+                            } else {
+                                miniIsPlaying = false;
+                                miniUpdatePlayPauseButton();
+                                setMiniStatus(\`Finished '\${miniCurrentFileName}'.\`, 'success');
+                            }
+                        });
+                        
+                        function saveMiniPlayerState() {
+                            const state = {
+                                apiKey: miniApiKey,
+                                voice: miniVoice,
+                                ssmlTemplate: miniSsmlTemplate,
+                                currentFileName: miniCurrentFileName,
+                                textChunks: miniTextChunks,
+                                audioChunks: miniAudioChunks,
+                                currentChunkIndex: miniCurrentChunkIndex,
+                                isPlaying: miniIsPlaying, 
+                                fileQueue: miniFileQueue,
+                                sortType: miniCurrentSortType, 
+                                sortOrder: miniCurrentSortOrder
+                            };
+                            localStorage.setItem('miniPlayerData', JSON.stringify(state));
+                        }
+                        
+                        function sortAndRenderMiniQueue() {
+                            if (miniCurrentSortType === 'alpha') {
+                                miniFileQueue.sort((a, b) => {
+                                    const nameA = a.name.toLowerCase();
+                                    const nameB = b.name.toLowerCase();
+                                    if (nameA < nameB) return miniCurrentSortOrder === 'asc' ? -1 : 1;
+                                    if (nameA > nameB) return miniCurrentSortOrder === 'asc' ? 1 : -1;
+                                    return 0;
+                                });
+                            } else { 
+                                miniFileQueue.sort((a, b) => {
+                                    return miniCurrentSortOrder === 'asc' ? a.timestamp - b.timestamp : b.timestamp - a.timestamp;
+                                });
+                            }
+                            renderFileQueue();
+                            updateMiniSortButtonIcons();
+                        }
+
+                        function updateMiniSortButtonIcons() {
+                            if (miniSortQueueAlphaBtn) {
+                                miniSortQueueAlphaBtn.innerHTML = miniCurrentSortType === 'alpha' && miniCurrentSortOrder === 'asc' ? '<i class="fas fa-sort-alpha-up"></i>' : '<i class="fas fa-sort-alpha-down"></i>';
+                                miniSortQueueAlphaBtn.classList.toggle('active', miniCurrentSortType === 'alpha');
+                            }
+                            if (miniSortQueueTimeBtn) {
+                                miniSortQueueTimeBtn.innerHTML = miniCurrentSortType === 'time' && miniCurrentSortOrder === 'asc' ? '<i class="fas fa-clock"></i> <i class="fas fa-sort-numeric-up"></i>' : '<i class="fas fa-clock"></i> <i class="fas fa-sort-numeric-down"></i>';
+                                miniSortQueueTimeBtn.classList.toggle('active', miniCurrentSortType === 'time');
+                            }
+                        }
+                        
+                        if(miniSortQueueAlphaBtn) {
+                            miniSortQueueAlphaBtn.addEventListener('click', () => {
+                                if (miniCurrentSortType === 'alpha') {
+                                    miniCurrentSortOrder = miniCurrentSortOrder === 'asc' ? 'desc' : 'asc';
+                                } else {
+                                    miniCurrentSortType = 'alpha';
+                                    miniCurrentSortOrder = 'asc'; 
+                                }
+                                sortAndRenderMiniQueue();
+                                saveMiniPlayerState(); 
+                            });
+                        }
+
+                        if(miniSortQueueTimeBtn) {
+                            miniSortQueueTimeBtn.addEventListener('click', () => {
+                                if (miniCurrentSortType === 'time') {
+                                    miniCurrentSortOrder = miniCurrentSortOrder === 'asc' ? 'desc' : 'asc';
+                                } else {
+                                    miniCurrentSortType = 'time';
+                                    miniCurrentSortOrder = 'desc'; 
+                                }
+                                sortAndRenderMiniQueue();
+                                saveMiniPlayerState(); 
+                            });
+                        }
+                        if(miniClearQueueBtn) {
+                            miniClearQueueBtn.addEventListener('click', () => {
+                                miniFileQueue = [];
+                                sortAndRenderMiniQueue(); 
+                                setMiniStatus('Queue cleared.', 'info');
+                            });
+                        }
+
+
+                        function renderFileQueue() {
+                            miniFileQueueList.innerHTML = '';
+                            if (miniFileQueue.length === 0) {
+                                miniFileQueueList.innerHTML = '<p class="text-xs text-gray-400 p-2 text-center">Queue is empty.</p>';
+                                return;
+                            }
+                            miniFileQueue.forEach((item, index) => {
+                                const itemDiv = document.createElement('div');
+                                itemDiv.classList.add('queue-item');
+                                itemDiv.innerHTML = \`
+                                    <span title="\${item.name}">\${item.name}</span>
+                                    <div class="mini-queue-buttons">
+                                        <button class="queue-load-btn queue-btn bg-green-500 hover:bg-green-600 text-white" data-index="\${index}">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A.5.5 0 009 7.618v4.764a.5.5 0 00.555.45l3.452-2.382a.5.5 0 000-.9L9.555 7.168z" clip-rule="evenodd" /></svg>
+                                        </button>
+                                        <button class="queue-remove-btn queue-btn bg-red-500 hover:bg-red-600 text-white" data-index="\${index}">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>
+                                        </button>
+                                    </div>
+                                \`;
+                                miniFileQueueList.appendChild(itemDiv);
+                            });
+
+                            document.querySelectorAll('.queue-load-btn').forEach(btn => {
+                                btn.addEventListener('click', (e) => {
+                                    const itemIndex = parseInt(e.currentTarget.dataset.index); 
+                                    const itemToLoad = miniFileQueue[itemIndex]; 
+                                    if (itemToLoad) {
+                                        loadItemForPlayback(itemToLoad);
+                                    }
+                                });
+                            });
+                            document.querySelectorAll('.queue-remove-btn').forEach(btn => {
+                                btn.addEventListener('click', (e) => {
+                                    const itemIndex = parseInt(e.currentTarget.dataset.index); 
+                                    miniFileQueue.splice(itemIndex, 1);
+                                    sortAndRenderMiniQueue(); 
+                                    saveMiniPlayerState();
+                                });
+                            });
+                        }
+
+                        function loadItemForPlayback(item) {
+                            miniStopPlayback(); 
+                            miniCurrentFileName = item.name;
+                            miniNowPlayingDisplay.textContent = miniCurrentFileName;
+                            
+                            miniTextChunks = [];
+                            let remainingText = item.content;
+                            while(remainingText.length > 0) {
+                                let chunk = remainingText.substring(0, MINI_MAX_CHUNK_LENGTH);
+                                if (remainingText.length > MINI_MAX_CHUNK_LENGTH) {
+                                    let lastPeriod = chunk.lastIndexOf('.');
+                                    if (lastPeriod > MINI_MAX_CHUNK_LENGTH / 2 && lastPeriod > -1) chunk = chunk.substring(0, lastPeriod + 1);
+                                }
+                                miniTextChunks.push(chunk);
+                                remainingText = remainingText.substring(chunk.length);
+                            }
+                            miniAudioChunks = new Array(miniTextChunks.length).fill(null); 
+                            miniCurrentChunkIndex = 0;
+                            
+                            if (miniTextChunks.length > 0) {
+                                miniLoadAndPlayChunk(0, true); 
+                            } else {
+                                setMiniStatus('No text in selected item.', 'info');
+                            }
+                            miniUpdateNavButtons();
+                            saveMiniPlayerState(); 
+                        }
+
+                        async function addItemToQueue(originalName, content, type) {
+                            setMiniStatus(\`Generating title for '\${originalName}'...\`, 'loading');
+                            const generatedTitle = await generateTitleWithGeminiMini(content, miniApiKey);
+                            const itemName = generatedTitle || originalName;
+                            miniFileQueue.push({ name: itemName, content, type, originalName: originalName, timestamp: Date.now() });
+                            sortAndRenderMiniQueue(); 
+                            saveMiniPlayerState();
+                            setMiniStatus(\`'\${itemName}' added to queue.\`, 'info');
+                        }
+
+                        miniDropZone.addEventListener('click', () => miniFileInput.click());
+                        miniDropZone.addEventListener('dragover', (e) => { e.preventDefault(); miniDropZone.classList.add('dragover'); });
+                        miniDropZone.addEventListener('dragleave', () => miniDropZone.classList.remove('dragover'));
+                        miniDropZone.addEventListener('drop', (e) => {
+                            e.preventDefault();
+                            miniDropZone.classList.remove('dragover');
+                            if (e.dataTransfer.files.length > 0) {
+                                Array.from(e.dataTransfer.files).forEach(file => miniProcessFileForQueue(file));
+                            }
+                        });
+                        miniFileInput.addEventListener('change', (e) => {
+                            if (e.target.files.length > 0) {
+                                Array.from(e.target.files).forEach(file => miniProcessFileForQueue(file));
+                                e.target.value = null; 
+                            }
+                        });
+
+                        miniAddToQueueBtn.addEventListener('click', async () => {
+                            const text = miniPasteArea.value.trim();
+                            if (text) {
+                                await addItemToQueue(\`Pasted Text \${new Date().toLocaleTimeString()}\`, text, 'text');
+                                miniPasteArea.value = '';
+                            } else {
+                                setMiniStatus('Paste area is empty.', 'info');
+                            }
+                        });
+
+                        async function miniProcessFileForQueue(file) {
+                            setMiniStatus(\`Adding '\${file.name}' to queue...\`, 'loading');
+                            let textContent = '';
+                            try {
+                                if (file.type === 'application/pdf') {
+                                    const arrayBuffer = await file.arrayBuffer();
+                                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                                    for (let i = 1; i <= pdf.numPages; i++) {
+                                        const page = await pdf.getPage(i);
+                                        const tc = await page.getTextContent();
+                                        textContent += tc.items.map(item => item.str).join(' ') + '\\n';
+                                    }
+                                } else {
+                                    textContent = await new Promise((resolve, reject) => {
+                                        const reader = new FileReader();
+                                        reader.onload = e => resolve(e.target.result);
+                                        reader.onerror = e => reject(e);
+                                        reader.readAsText(file);
+                                    });
+                                }
+                                if (!textContent.trim()) throw new Error("Empty text from file.");
+                                await addItemToQueue(file.name, textContent, 'file');
+                            } catch (error) {
+                                console.error("Error processing file for queue:", error);
+                                setMiniStatus(\`Error adding '\${file.name}': \${error.message}\`, 'error');
+                            }
+                        }
+
+                        window.onload = () => {
+                            const data = JSON.parse(localStorage.getItem('miniPlayerData'));
+                            if (data) {
+                                miniApiKey = data.apiKey || '';
+                                miniVoice = data.voice || DEFAULT_MINI_VOICE;
+                                miniSsmlTemplate = data.ssmlTemplate || '<speak><p><s>{{TEXT_CONTENT}}</s></p></speak>';
+                                miniFileQueue = data.fileQueue || []; 
+                                miniCurrentSortType = data.sortType || 'time';
+                                miniCurrentSortOrder = data.sortOrder || 'desc';
+
+
+                                if (data.fileName && data.fileName !== "Ready" && data.textChunks && data.textChunks.length > 0) {
+                                    miniCurrentFileName = data.fileName;
+                                    miniTextChunks = data.textChunks;
+                                    miniAudioChunks = data.audioChunks || new Array(miniTextChunks.length).fill(null);
+                                    miniCurrentChunkIndex = data.currentChunkIndex || 0;
+                                    miniNowPlayingDisplay.textContent = miniCurrentFileName;
+                                    miniLoadAndPlayChunk(miniCurrentChunkIndex, data.isPlaying || false);
+                                } else if (miniFileQueue.length > 0) {
+                                    setMiniStatus('Queue loaded. Select an item to play.', 'info');
+                                } else {
+                                    setMiniStatus('Ready. Add files to queue or player.', 'info');
+                                }
+                            } else {
+                                setMiniStatus('Error: No data for mini player.', 'error');
+                            }
+                            sortAndRenderMiniQueue(); 
+                            miniUpdateNavButtons();
+                        };
+                    <\/script> 
+                </body>
+                </html>
+            `;
+
+            // --- Toast Notifications ---
+            function showToast(message, type = 'success', duration = 3000) {
+                const toast = document.createElement('div');
+                toast.classList.add('toast');
+                let iconHtml = '';
+
+                if (type === 'success') {
+                    toast.classList.add('success'); 
+                    iconHtml = '<i class="fas fa-check-circle toast-icon"></i>';
+                } else if (type === 'error') {
+                    toast.classList.add('error');
+                    iconHtml = '<i class="fas fa-times-circle toast-icon"></i>';
+                } else if (type === 'info') {
+                    toast.classList.add('info');
+                    iconHtml = '<i class="fas fa-info-circle toast-icon"></i>';
+                }
+                
+                toast.innerHTML = `${iconHtml}<span>${message}</span>`;
+                toastContainer.appendChild(toast);
+                toast.offsetHeight; 
+                toast.classList.add('show');
+
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                    setTimeout(() => {
+                        toast.remove();
+                    }, 300); 
+                }, duration);
+            }
+
+            // --- Message Box (Modal) ---
+            function showModalMessage(title, text) {
+                messageBoxTitle.textContent = title;
+                messageBoxText.textContent = text;
+                messageBoxOverlay.classList.remove('hidden');
+            }
+            if (messageBoxButton) { 
+                messageBoxButton.addEventListener('click', () => {
+                    messageBoxOverlay.classList.add('hidden');
+                });
+            }
+
+
+            // --- Settings ---
+            if (settingsBtn && settingsSection && saveSettingsBtn && apiKeyInput && voiceSelect && historyPanel && ssmlTemplateInput) {
+                settingsBtn.addEventListener('click', () => {
+                    settingsSection.classList.toggle('hidden');
+                    historyPanel.classList.remove('open'); 
+                });
+
+                saveSettingsBtn.addEventListener('click', () => {
+                    const key = apiKeyInput.value.trim();
+                    const voice = voiceSelect.value;
+                    const ssml = ssmlTemplateInput.value.trim();
+                    if (key) {
+                        localStorage.setItem('ttsPlayerApiKey', key);
+                        localStorage.setItem('ttsPlayerVoice', voice);
+                        localStorage.setItem('ttsPlayerSsmlTemplate', ssml);
+                        settingsSection.classList.add('hidden');
+                        showToast('Settings Saved!');
+                    } else {
+                        showModalMessage('API Key Error', 'Please enter a valid API key.');
+                    }
+                });
+            }
+
+
+            function loadAndCheckSettings() {
+                const savedApiKey = localStorage.getItem('ttsPlayerApiKey');
+                const savedVoice = localStorage.getItem('ttsPlayerVoice');
+                const savedSsmlTemplate = localStorage.getItem('ttsPlayerSsmlTemplate');
+
+                if (apiKeyInput) apiKeyInput.value = savedApiKey || '';
+                
+                if (voiceSelect) {
+                    if (savedVoice) {
+                        let voiceExists = false;
+                        for(let i=0; i < voiceSelect.options.length; i++) {
+                            if(voiceSelect.options[i].value === savedVoice) {
+                                voiceExists = true;
+                                break;
+                            }
+                        }
+                        if (voiceExists) {
+                            voiceSelect.value = savedVoice;
+                        } else {
+                            voiceSelect.value = DEFAULT_VOICE; 
+                            localStorage.setItem('ttsPlayerVoice', DEFAULT_VOICE); 
+                        }
+                    } else {
+                        voiceSelect.value = DEFAULT_VOICE; 
+                    }
+                }
+                
+                if (ssmlTemplateInput) {
+                    ssmlTemplateInput.value = savedSsmlTemplate || DEFAULT_SSML_TEMPLATE;
+                }
+
+
+                if (settingsSection) {
+                    if (savedApiKey) { 
+                        settingsSection.classList.add('hidden');
+                    } else {
+                        settingsSection.classList.remove('hidden'); 
+                    }
+                }
+            }
+
+            // --- History Panel ---
+            if (historyBtn && historyPanel && closeHistoryBtn && settingsSection) {
+                historyBtn.addEventListener('click', () => {
+                    historyPanel.classList.toggle('open');
+                    settingsSection.classList.add('hidden'); 
+                });
+                closeHistoryBtn.addEventListener('click', () => {
+                    historyPanel.classList.remove('open');
+                });
+            }
+
+
+            // --- Pop-out Player ---
+            if (popOutPlayerBtnHeader) { 
+                popOutPlayerBtnHeader.addEventListener('click', () => {
+                    const currentGoogleApiKey = localStorage.getItem('ttsPlayerApiKey');
+                    if (!currentGoogleApiKey) {
+                         showModalMessage('API Key Required', 'Please set your Google TTS API Key in Settings before using the Mini Player.');
+                         if(settingsSection) settingsSection.classList.remove('hidden');
+                         return;
+                    }
+
+                    const miniPlayerData = {
+                        apiKey: currentGoogleApiKey, 
+                        voice: localStorage.getItem('ttsPlayerVoice') || DEFAULT_VOICE,
+                        ssmlTemplate: localStorage.getItem('ttsPlayerSsmlTemplate') || DEFAULT_SSML_TEMPLATE,
+                        fileName: currentFileName || "Ready", 
+                        textChunks: textChunks || [],    
+                        audioChunks: audioChunks || [],  
+                        currentChunkIndex: currentChunkIndex || 0,
+                        isPlaying: isPlaying,      
+                        fileQueue: JSON.parse(localStorage.getItem('miniPlayerData'))?.fileQueue || [],
+                        sortType: JSON.parse(localStorage.getItem('miniPlayerData'))?.sortType || 'time',
+                        sortOrder: JSON.parse(localStorage.getItem('miniPlayerData'))?.sortOrder || 'desc'
+                    };
+                    localStorage.setItem('miniPlayerData', JSON.stringify(miniPlayerData));
+
+                    if (isPlaying && audioPlayer) {
+                        audioPlayer.pause();
+                    }
+                    
+                    const windowFeatures = "width=400,height=600,resizable=yes,scrollbars=yes,status=no,location=no,toolbar=no,menubar=no";
+                    if (miniPlayerWindow && !miniPlayerWindow.closed) {
+                        miniPlayerWindow.focus();
+                         // Optionally, you might want to tell the existing window to reload its data
+                        if (typeof miniPlayerWindow.loadDataFromStorage === 'function') {
+                            miniPlayerWindow.loadDataFromStorage(); // Assuming you add such a function to mini-player
+                        } else { // Fallback: reload the window to pick up new data (might interrupt playback)
+                            miniPlayerWindow.location.reload();
+                        }
+                    } else {
+                        miniPlayerWindow = window.open('', '_blank', windowFeatures);
+                         if(miniPlayerWindow){
+                            miniPlayerWindow.document.write(miniPlayerHTML);
+                            miniPlayerWindow.document.close(); 
+                        } else {
+                            showModalMessage('Pop-up Blocked', 'Please allow pop-ups for this site to use the mini player.');
+                        }
+                    }
+                });
+            }
+
+            function escapeXml(unsafe) {
+                return unsafe.replace(/[<>&"']/g, function (c) {
+                    switch (c) {
+                        case '<': return '&lt;';
+                        case '>': return '&gt;';
+                        case '&': return '&amp;';
+                        case '"': return '&quot;';
+                        case "'": return '&apos;';
+                    }
+                    return c;
+                });
+            }
+
+
+            // --- Main Player Queue Logic ---
+            async function addMainItemToQueue(originalName, content, type) {
+                setStatus(`Processing '${originalName}' for queue...`, 'loading'); 
+                const googleApiKey = localStorage.getItem('ttsPlayerApiKey');
+                let itemName = originalName;
+                if (type === 'text' || (type === 'file' && !originalName.toLowerCase().endsWith('.txt') && !originalName.toLowerCase().endsWith('.pdf')) ) {
+                    const generatedTitle = await generateTitleWithGemini(content, googleApiKey);
+                    itemName = generatedTitle || originalName;
+                }
+                
+                mainPlayerQueue.push({ name: itemName, content, type, originalName: originalName, timestamp: Date.now() });
+                sortAndRenderMainQueue(); 
+                showToast(`'${itemName}' added to main queue.`, 'info');
+                setStatus(`'${itemName}' added to queue.`, 'success'); 
+            }
+
+            function sortAndRenderMainQueue() {
+                if (currentSortType === 'alpha') {
+                    mainPlayerQueue.sort((a, b) => {
+                        const nameA = a.name.toLowerCase();
+                        const nameB = b.name.toLowerCase();
+                        if (nameA < nameB) return currentSortOrder === 'asc' ? -1 : 1;
+                        if (nameA > nameB) return currentSortOrder === 'asc' ? 1 : -1;
+                        return 0;
+                    });
+                } else { 
+                    mainPlayerQueue.sort((a, b) => {
+                        return currentSortOrder === 'asc' ? a.timestamp - b.timestamp : b.timestamp - a.timestamp;
+                    });
+                }
+                renderMainPlayerQueue();
+                updateSortButtonIcons();
+            }
+            
+            function updateSortButtonIcons() {
+                if (sortQueueAlphaBtn) {
+                    sortQueueAlphaBtn.innerHTML = currentSortType === 'alpha' && currentSortOrder === 'asc' ? '<i class="fas fa-sort-alpha-up"></i>' : '<i class="fas fa-sort-alpha-down"></i>';
+                    sortQueueAlphaBtn.classList.toggle('active', currentSortType === 'alpha');
+                }
+                if (sortQueueTimeBtn) {
+                    sortQueueTimeBtn.innerHTML = currentSortType === 'time' && currentSortOrder === 'asc' ? '<i class="fas fa-clock"></i> <i class="fas fa-sort-numeric-up"></i>' : '<i class="fas fa-clock"></i> <i class="fas fa-sort-numeric-down"></i>';
+                     sortQueueTimeBtn.classList.toggle('active', currentSortType === 'time');
+                }
+            }
+
+
+            if(sortQueueAlphaBtn) {
+                sortQueueAlphaBtn.addEventListener('click', () => {
+                    if (currentSortType === 'alpha') {
+                        currentSortOrder = currentSortOrder === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        currentSortType = 'alpha';
+                        currentSortOrder = 'asc'; 
+                    }
+                    sortAndRenderMainQueue();
+                });
+            }
+
+            if(sortQueueTimeBtn) {
+                sortQueueTimeBtn.addEventListener('click', () => {
+                     if (currentSortType === 'time') {
+                        currentSortOrder = currentSortOrder === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        currentSortType = 'time';
+                        currentSortOrder = 'desc'; 
+                    }
+                    sortAndRenderMainQueue();
+                });
+            }
+             if (clearMainQueueBtn) {
+                clearMainQueueBtn.addEventListener('click', () => {
+                    mainPlayerQueue = [];
+                    sortAndRenderMainQueue(); // This will re-render the empty queue
+                    showToast('Main queue cleared.', 'info');
+                });
+            }
+
+
+            function renderMainPlayerQueue() {
+                if (!mainFileQueueList) return;
+                mainFileQueueList.innerHTML = '';
+                if (mainPlayerQueue.length === 0) {
+                    mainFileQueueList.innerHTML = '<p class="text-gray-400 italic text-center p-2">Queue is empty.</p>';
+                    return;
+                }
+                mainPlayerQueue.forEach((item, index) => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.classList.add('queue-item-main', 'p-2', 'hover:bg-sky-100', 'rounded');
+                     if (index % 2 !== 0) { 
+                        itemDiv.classList.add('bg-sky-50'); 
+                    }
+                    itemDiv.innerHTML = `
+                        <span title="${item.name}">${item.name}</span>
+                        <div class="queue-item-buttons-main">
+                            <button class="main-queue-load-btn queue-btn-main bg-green-500 hover:bg-green-600 text-white" data-original-index="${mainPlayerQueue.indexOf(item)}" title="Load & Play">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" /></svg>
+                            </button>
+                            <button class="main-queue-remove-btn queue-btn-main bg-red-500 hover:bg-red-600 text-white" data-original-index="${mainPlayerQueue.indexOf(item)}" title="Remove">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.58.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clip-rule="evenodd" /></svg>
+                            </button>
+                        </div>
+                    `;
+                    mainFileQueueList.appendChild(itemDiv);
+                });
+
+                document.querySelectorAll('.main-queue-load-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const originalIndex = parseInt(e.currentTarget.dataset.originalIndex); // Use currentTarget
+                        const itemToLoad = mainPlayerQueue[originalIndex]; 
+                        if (itemToLoad) {
+                            loadMainItemForPlayback(itemToLoad);
+                        }
+                    });
+                });
+                document.querySelectorAll('.main-queue-remove-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const originalIndex = parseInt(e.currentTarget.dataset.originalIndex); // Use currentTarget
+                        mainPlayerQueue.splice(originalIndex, 1); 
+                        sortAndRenderMainQueue(); 
+                    });
+                });
+            }
+            
+            function loadMainItemForPlayback(item) {
+                currentText = item.content;
+                currentFileName = item.name; 
+                if (nowPlayingDisplay) nowPlayingDisplay.textContent = `Now Playing: ${currentFileName}`;
+                setStatus(`Processing '${currentFileName}'...`, 'info');
+                if (audioPlayerContainer) audioPlayerContainer.classList.remove('hidden');
+                resetPlayer(); 
+                
+                addToHistory(item.type === 'file' ? (item.originalName || item.name) : item.name, currentText);
+                chunkAndSynthesize(currentText); 
+            }
+
+
+            // --- Drop Zone Logic (now adds to main queue) ---
+            if (dropZone && fileInput) {
+                dropZone.addEventListener('click', () => fileInput.click());
+                dropZone.addEventListener('dragover', (event) => {
+                    event.preventDefault();
+                    dropZone.classList.add('dragover');
+                });
+                dropZone.addEventListener('dragleave', () => {
+                    dropZone.classList.remove('dragover');
+                });
+                dropZone.addEventListener('drop', (event) => {
+                    event.preventDefault();
+                    dropZone.classList.remove('dragover');
+                    const files = event.dataTransfer.files;
+                    if (files.length > 0) {
+                        Array.from(files).forEach(file => processFileForMainQueue(file));
+                        fileInput.value = null; 
+                    }
+                });
+                fileInput.addEventListener('change', (event) => {
+                    const files = event.target.files;
+                    if (files.length > 0) {
+                         Array.from(files).forEach(file => processFileForMainQueue(file));
+                         event.target.value = null; 
+                    }
+                });
+            }
+            
+            async function processFileForMainQueue(file) {
+                setStatus(`Adding '${file.name}' to queue...`, 'loading'); 
+                let textContent = '';
+                try {
+                    if (file.type === 'application/pdf') {
+                        textContent = await extractTextFromPdf(file);
+                    } else if (file.type === 'text/plain') {
+                        textContent = await readFileAsText(file);
+                    } else {
+                         try {
+                            textContent = await readFileAsText(file);
+                             if (!textContent || !textContent.trim()) { 
+                                throw new Error('File does not appear to contain text or is empty.');
+                            }
+                        } catch (e) {
+                             throw new Error(`Unsupported file type: ${file.type || 'unknown'}. Please use .txt or .pdf.`);
+                        }
+                    }
+                    if (!textContent || textContent.trim().length === 0) {
+                        throw new Error("Extracted text is empty.");
+                    }
+                    await addMainItemToQueue(file.name, textContent, 'file'); 
+                } catch (error) {
+                    console.error("Error processing file for main queue:", error);
+                    setStatus(`Error adding '${file.name}': ${error.message}`, 'error'); 
+                    showModalMessage('File Error', `Could not add '${file.name}': ${error.message}`);
+                }
+            }
+            
+            // --- Paste Text Logic (now adds to main queue) ---
+            if (addPastedToQueueBtn && textPasteArea) {
+                addPastedToQueueBtn.addEventListener('click', async () => { 
+                    const pastedText = textPasteArea.value.trim();
+                    if (!pastedText) {
+                        showModalMessage('No Text', 'Please paste some text into the area.');
+                        return;
+                    }
+                    const currentApiKey = localStorage.getItem('ttsPlayerApiKey'); 
+                    if (!currentApiKey) {
+                        showModalMessage('API Key Required', 'Please set your Google TTS API Key in Settings.');
+                        if (settingsSection) settingsSection.classList.remove('hidden');
+                        return;
+                    }
+                    setStatus(`Adding pasted text to queue...`, 'loading'); 
+                    await addMainItemToQueue(`Pasted Text`, pastedText, 'text'); 
+                    textPasteArea.value = ''; 
+                });
+            }
+
+
+            // --- File Handling (extracts text, used by queue processing) ---
+            function readFileAsText(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (event) => resolve(event.target.result);
+                    reader.onerror = (error) => reject(error);
+                    reader.readAsText(file);
+                });
+            }
+
+            async function extractTextFromPdf(file) {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                let fullText = '';
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    fullText += textContent.items.map(item => item.str).join(' ') + '\n';
+                }
+                return fullText;
+            }
+
+            // --- Text Chunking & SSML Wrapping for TTS ---
+            function chunkAndSynthesize(text) { 
+                textChunks = []; 
+                const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 0); 
+
+                paragraphs.forEach(paragraph => {
+                    let currentParagraphText = paragraph;
+                    while (currentParagraphText.length > 0) {
+                        let chunkContent = currentParagraphText.substring(0, MAX_CHUNK_LENGTH);
+                        if (currentParagraphText.length > MAX_CHUNK_LENGTH) {
+                            let lastPeriod = chunkContent.lastIndexOf('.');
+                            let lastQuestion = chunkContent.lastIndexOf('?');
+                            let lastExclamation = chunkContent.lastIndexOf('!');
+                            let splitPoint = Math.max(lastPeriod, lastQuestion, lastExclamation);
+                            
+                            if (splitPoint > chunkContent.length / 2 && splitPoint > 0) { 
+                                chunkContent = chunkContent.substring(0, splitPoint + 1);
+                            }
+                        }
+                        textChunks.push(chunkContent.trim());
+                        currentParagraphText = currentParagraphText.substring(chunkContent.length).trim();
+                    }
+                });
+
+
+                audioChunks = new Array(textChunks.length).fill(null);
+                currentChunkIndex = 0; 
+                isPlaying = false; 
+                if(audioPlayer) audioPlayer.src = ''; 
+
+
+                if (textChunks.length > 0) {
+                    for (let i = 0; i < textChunks.length; i++) {
+                        synthesizeChunk(i); 
+                    }
+                    if (audioChunks[0]) {
+                        loadAndPlayChunk(0, true);
+                    } else if (textChunks[0]) { 
+                        loadAndPlayChunk(0, true);
+                    }
+
+                } else {
+                    setStatus('No text to synthesize.', 'info');
+                    updateNavButtons(); 
+                }
+            }
+
+            async function synthesizeChunk(index) { 
+                 if (index >= textChunks.length) return;
+
+                if (index === currentChunkIndex || (index === 0 && !audioPlayer.src) ) {
+                    setStatus(`Synthesizing chunk ${index + 1} of ${textChunks.length}...`, 'loading');
+                }
+                
+                const apiKey = localStorage.getItem('ttsPlayerApiKey'); 
+                const selectedVoice = localStorage.getItem('ttsPlayerVoice') || DEFAULT_VOICE;
+                const ssmlTemplate = localStorage.getItem('ttsPlayerSsmlTemplate') || DEFAULT_SSML_TEMPLATE;
+                
+                const plainTextChunk = textChunks[index];
+                const escapedTextChunk = escapeXml(plainTextChunk);
+                const ssmlPayload = ssmlTemplate.replace('{{TEXT_CONTENT}}', escapedTextChunk);
+
+
+                if (!apiKey) {
+                    setStatus('API Key is missing. Please set it in Settings.', 'error');
+                    showModalMessage('API Key Error', 'Google TTS API Key is required. Please set it in Settings.');
+                    if(settingsSection) settingsSection.classList.remove('hidden');
+                    return; 
+                }
+
+                const requestBody = {
+                    input: { ssml: ssmlPayload }, 
+                    voice: { languageCode: selectedVoice.substring(0,5), name: selectedVoice }, 
+                    audioConfig: { audioEncoding: 'MP3' }
+                };
+
+                try {
+                    const response = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(requestBody)
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        console.error('TTS API Error:', errorData);
+                        let detailedMessage = `TTS API Error: ${errorData.error?.message || response.statusText}`;
+                        if (response.status === 400 && errorData.error?.message.toLowerCase().includes("api key not valid")) {
+                            detailedMessage = "TTS API Error: The provided API Key is not valid. Please check it in Settings.";
+                            if(settingsSection) settingsSection.classList.remove('hidden'); 
+                        } else if (response.status === 403) {
+                            detailedMessage = "TTS API Error: Permission denied. The API key might not have Text-to-Speech API enabled, or billing is not set up correctly.";
+                        } else if (response.status === 400 && errorData.error?.message.toLowerCase().includes("voice")) { 
+                            detailedMessage = `TTS API Error: Invalid voice selection or issue with the voice parameter (${selectedVoice}). Please check Settings. Details: ${errorData.error?.message}`;
+                        } else if (response.status === 400 && errorData.error?.message.toLowerCase().includes("ssml")) {
+                            detailedMessage = `SSML Error: ${errorData.error?.message}. Check your SSML template in settings.`;
+                        }
+                        throw new Error(detailedMessage);
+                    }
+
+                    const data = await response.json();
+                    if (data.audioContent) {
+                        audioChunks[index] = `data:audio/mp3;base64,${data.audioContent}`;
+                        if (index === currentChunkIndex) { 
+                           setStatus(`Chunk ${index + 1} synthesized.`, 'success');
+                        }
+                        
+                        if (index === 0 && currentChunkIndex === 0 && (!audioPlayer.src || audioPlayer.paused) ) {
+                            loadAndPlayChunk(0, true); 
+                        }
+                        else if (index === currentChunkIndex && isPlaying && audioPlayer.paused && audioPlayer.src !== audioChunks[index]) {
+                             loadAndPlayChunk(currentChunkIndex, true);
+                        }
+
+
+                    } else {
+                        throw new Error('No audio content received from TTS API.');
+                    }
+                } catch (error) {
+                    console.error('Error synthesizing speech:', error);
+                    setStatus(`Error synthesizing chunk ${index + 1}: ${error.message}`, 'error');
+                    if (index === currentChunkIndex) { 
+                        showModalMessage('TTS Error', `Failed to synthesize chunk ${index + 1}: ${error.message}`);
+                        stopPlayback();
+                    }
+                }
+            }
+            
+            // --- Audio Player Logic (for currently loaded item) ---
+            function loadAndPlayChunk(index, autoplay = false) {
+                if (index < 0 || index >= textChunks.length) { 
+                    if (index >= textChunks.length && isPlaying) stopPlayback(); 
+                    return;
+                }
+                currentChunkIndex = index; 
+                updateNavButtons();
+
+                if (audioChunks[index]) { 
+                    if(audioPlayer) {
+                        audioPlayer.src = audioChunks[index];
+                        audioPlayer.currentTime = 0; 
+                        if (autoplay) { 
+                            audioPlayer.play().catch(e => {
+                                console.error("Error playing audio:", e);
+                                setStatus(`Error playing audio: ${e.message}`, 'error');
+                                isPlaying = false;
+                                updatePlayPauseButton();
+                            });
+                        }
+                    }
+                } else { 
+                    setStatus(`Chunk ${index + 1} not yet synthesized. Attempting synthesis...`, 'loading');
+                    synthesizeChunk(index).then(() => {
+                        if (audioChunks[index] && autoplay) {
+                            loadAndPlayChunk(index, true); 
+                        }
+                    }).catch(error => { 
+                         console.error(`[loadAndPlayChunk] Error during on-demand synthesizeChunk for chunk ${index}:`, error);
+                         setStatus(`On-demand synthesis failed for chunk ${index + 1}.`, 'error');
+                    });
+                }
+            }
+            
+            if (playPauseBtn && audioPlayer) {
+                playPauseBtn.addEventListener('click', () => {
+                    if (textChunks.length === 0) { 
+                        showModalMessage('No Audio', 'Please load an item from the queue to play.');
+                        return;
+                    }
+                    if (!audioChunks[currentChunkIndex] && textChunks[currentChunkIndex]) {
+                        setStatus('Synthesizing and preparing to play...', 'loading');
+                        loadAndPlayChunk(currentChunkIndex, true); 
+                        return;
+                    }
+                    if (!audioPlayer.src && audioChunks[currentChunkIndex]) {
+                        loadAndPlayChunk(currentChunkIndex, true);
+                        return;
+                    }
+                    if (audioPlayer.paused) { 
+                        audioPlayer.play().catch(e => console.error("Play error:", e));
+                    } else {
+                        audioPlayer.pause();
+                    }
+                });
+            }
+
+            if(stopBtn) stopBtn.addEventListener('click', stopPlayback);
+
+            function stopPlayback() {
+                if(audioPlayer) {
+                    audioPlayer.pause();
+                    if(audioPlayer.src) audioPlayer.currentTime = 0; 
+                }
+                isPlaying = false; 
+                updatePlayPauseButton();
+                setStatus('Playback stopped.', 'info');
+            }
+            
+            function resetPlayer() { 
+                stopPlayback();
+                if(audioPlayer) audioPlayer.src = '';
+                if(nowPlayingDisplay) nowPlayingDisplay.textContent = 'Now Playing: -'; 
+                if(seekBar) seekBar.value = 0;
+                if(currentTimeDisplay) currentTimeDisplay.textContent = '0:00';
+                if(totalDurationDisplay) totalDurationDisplay.textContent = '0:00';
+                updateNavButtons(); 
+            }
+
+            if(nextChunkBtn) {
+                nextChunkBtn.addEventListener('click', () => {
+                    if (currentChunkIndex < textChunks.length - 1) {
+                        currentChunkIndex++; 
+                        loadAndPlayChunk(currentChunkIndex, true); 
+                    }
+                });
+            }
+
+            if(prevChunkBtn) {
+                prevChunkBtn.addEventListener('click', () => {
+                    if (currentChunkIndex > 0) {
+                        currentChunkIndex--; 
+                        loadAndPlayChunk(currentChunkIndex, true); 
+                    }
+                });
+            }
+
+            if(audioPlayer) {
+                audioPlayer.addEventListener('ended', () => {
+                    if (currentChunkIndex < textChunks.length - 1) {
+                        currentChunkIndex++;
+                        loadAndPlayChunk(currentChunkIndex, true); 
+                    } else {
+                        isPlaying = false; 
+                        updatePlayPauseButton();
+                        setStatus('Finished Playing.', 'success'); 
+                    }
+                });
+
+                audioPlayer.addEventListener('play', () => {
+                    isPlaying = true;
+                    updatePlayPauseButton();
+                });
+                audioPlayer.addEventListener('pause', () => {
+                    isPlaying = false;
+                    updatePlayPauseButton();
+                });
+
+                audioPlayer.addEventListener('loadedmetadata', () => {
+                    updateSeekBar();
+                    updateTimeDisplays();
+                    updateNavButtons(); 
+                });
+                audioPlayer.addEventListener('timeupdate', () => {
+                    updateSeekBar();
+                    updateTimeDisplays();
+                });
+            }
+
+
+            if(seekBar) {
+                seekBar.addEventListener('input', () => {
+                    if (audioPlayer && audioPlayer.src && audioPlayer.duration) {
+                        audioPlayer.currentTime = (seekBar.value / 100) * audioPlayer.duration;
+                    }
+                });
+            }
+            if(volumeBar && audioPlayer) {
+                volumeBar.addEventListener('input', () => {
+                    audioPlayer.volume = volumeBar.value;
+                });
+            }
+            if(playbackSpeedSelect && audioPlayer) {
+                playbackSpeedSelect.addEventListener('change', () => {
+                    audioPlayer.playbackRate = parseFloat(playbackSpeedSelect.value);
+                });
+            }
+
+
+            function updatePlayPauseButton() {
+                if(playPauseBtn) {
+                    playPauseBtn.innerHTML = isPlaying ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>';
+                    playPauseBtn.title = isPlaying ? 'Pause' : 'Play';
+                }
+            }
+
+            function updateSeekBar() {
+                if (audioPlayer && seekBar && audioPlayer.duration && isFinite(audioPlayer.duration)) { 
+                    seekBar.value = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+                } else if (seekBar) {
+                    seekBar.value = 0;
+                }
+            }
+
+            function formatTime(seconds) {
+                if (isNaN(seconds) || !isFinite(seconds)) return "0:00"; 
+                const min = Math.floor(seconds / 60);
+                const sec = Math.floor(seconds % 60);
+                return `${min}:${sec < 10 ? '0' : ''}${sec}`;
+            }
+
+            function updateTimeDisplays() {
+                if(currentTimeDisplay && audioPlayer) currentTimeDisplay.textContent = formatTime(audioPlayer.currentTime);
+                if(totalDurationDisplay && audioPlayer) totalDurationDisplay.textContent = formatTime(audioPlayer.duration || 0);
+            }
+            
+            function updateNavButtons() { 
+                const hasActiveContent = textChunks.length > 0; 
+                if(prevChunkBtn) prevChunkBtn.disabled = currentChunkIndex === 0 || !hasActiveContent;
+                if(nextChunkBtn) nextChunkBtn.disabled = currentChunkIndex >= textChunks.length - 1 || !hasActiveContent;
+                if(playPauseBtn) playPauseBtn.disabled = !hasActiveContent;
+                if(stopBtn) stopBtn.disabled = !hasActiveContent || (audioPlayer && !audioPlayer.src); 
+            }
+
+            // --- History Logic ---
+            function addToHistory(fileName, textContent) {
+                const nameForHistory = (fileName && (fileName.startsWith("Pasted Text") || fileName.startsWith("AI Title:"))) ? fileName : (currentFileName || fileName);
+
+                const existingIndex = sessionHistory.findIndex(item => item.name === nameForHistory);
+                if (existingIndex > -1) {
+                    sessionHistory.splice(existingIndex, 1); 
+                }
+                sessionHistory.unshift({ name: nameForHistory, text: textContent }); 
+                
+                if (sessionHistory.length > 10) { 
+                    sessionHistory.pop();
+                }
+                renderHistory();
+            }
+
+            function renderHistory() {
+                if (!historyList) return;
+                if (sessionHistory.length === 0) {
+                    historyList.innerHTML = '<p class="text-gray-400 italic">No files processed yet.</p>';
+                    return;
+                }
+                historyList.innerHTML = ''; 
+                sessionHistory.forEach((item, index) => { 
+                    const div = document.createElement('div');
+                    div.classList.add('history-item', 'p-2', 'hover:bg-sky-100', 'rounded', 'cursor-pointer', 'truncate'); 
+                    if (index % 2 !== 0) { 
+                        div.classList.add('bg-sky-50'); 
+                    }
+                    div.textContent = item.name;
+                    div.title = `Play ${item.name}`;
+                    div.addEventListener('click', () => {
+                        loadMainItemForPlayback({name: item.name, content: item.text, type: 'history', originalName: item.name}); 
+                        if(historyPanel) historyPanel.classList.remove('open'); 
+                    });
+                    historyList.appendChild(div);
+                });
+            }
+            
+            // --- Status Messages ---
+            function setStatus(message, type = 'info') { 
+                if (!statusMessage) return;
+                statusMessage.textContent = message;
+                statusMessage.className = 'mb-4 p-3 rounded-md text-sm text-center'; 
+                
+                switch (type) {
+                    case 'success':
+                        statusMessage.classList.add('bg-green-100', 'text-green-700');
+                        break;
+                    case 'warning':
+                        statusMessage.classList.add('bg-yellow-100', 'text-yellow-700'); 
+                        break;
+                    case 'error':
+                        statusMessage.classList.add('bg-red-100', 'text-red-700');
+                        break;
+                    case 'loading':
+                        statusMessage.classList.add('bg-indigo-100', 'text-indigo-700');
+                        message = `⏳ ${message}`; 
+                        break;
+                    case 'info':
+                    default:
+                        statusMessage.classList.add('bg-blue-100', 'text-blue-700'); 
+                        break;
+                }
+                statusMessage.textContent = message; 
+            }
+
+            // --- Initial Setup ---
+            loadAndCheckSettings();
+            renderHistory(); 
+            renderMainPlayerQueue(); 
+            updateNavButtons(); 
+            updateSortButtonIcons(); 
+
+        }); // End of DOMContentLoaded
+    </script>
+</body>
+</html>
