@@ -130,4 +130,6 @@ Contributions, issues, and feature requests are welcome! Please feel free to che
 
 ## 📝 License
 
-This project is open-source. Please refer to the repository's license file for more details (e.g., MIT License, if you choose to add one).
+This project is open-source. Please refer to the repository's license file for more details.
+
+<br><br><img src="screenshot.jpg" alt="Screenshot">
